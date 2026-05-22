@@ -155,41 +155,58 @@ const fetchAndDecryptNotes = async () => {
         if (e.data.size > 0) chunks.push(e.data);
       };
 
-      recorder.onstop = async () => {
-        setIsSaving(true);
-        setStatusMessage("Processing & Encrypting note...");
-        
-        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-        
-        // 1. Grab our local private key from memory
-        const key = await getOrCreateEncryptionKey();
+recorder.onstop = async () => {
+      const audioBlob = new Blob(chunks, { type: "audio/webm" });
+      setAudioChunks([]); // reset buffer memory immediately
+      setIsSaving(true);
+      setStatusMessage("Processing voice with AI...");
 
-        // 2. Mock AI Transcription (We will plug in your Whisper/OpenAI API next!)
-        const rawTranscript = "Met with an absolute powerhouse developer at the coffee shop. They are building an offline-first iOS app and want to sync up next Tuesday regarding database architecture choices.";
-        const rawHeadline = "Coffee meeting - App architecture sync";
+      try {
+        // 1. Ship raw audio blob off to our backend route
+        const formData = new FormData();
+        formData.append("file", audioBlob, "memo.webm");
 
-        // 3. Encrypt the data locally BEFORE hitting the wire
-        const secretHeadline = await encryptData(rawHeadline, key);
-        const secretTranscript = await encryptData(rawTranscript, key);
-
-        // 4. Save directly into Supabase
-        const { error: dbError } = await supabase.from('network_notes').insert({
-          user_id: session.user.id,
-          encrypted_headline: secretHeadline,
-          encrypted_transcript: secretTranscript,
-          audio_url: null // We will handle audio storage bucket setup shortly!
+        const response = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
         });
 
-        if (dbError) {
-          setError(dbError.message);
-        } else {
-          setStatusMessage("✓ Note safely encrypted and saved to database!");
-          await fetchAndDecryptNotes();
-          setTimeout(() => setStatusMessage(null), 4000);
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || "Failed to process audio.");
         }
-        setIsSaving(false);
-      };
 
+        const { transcript, headline } = await response.json();
+
+        // 2. Fetch local crypto key from client browser memory
+        setStatusMessage("Encrypting data locally...");
+        const key = await getOrCreateEncryptionKey();
+
+        // 3. Securely transform plain text to ciphertext on device
+        const encryptedHeadline = await encryptData(headline, key);
+        const encryptedTranscript = await encryptData(transcript, key);
+
+        // 4. Record payload securely to Supabase
+        const user_id = session?.user?.id;
+        const { error: insertError } = await supabase
+          .from("network_notes")
+          .insert([{ user_id, encrypted_headline: encryptedHeadline, encrypted_transcript: encryptedTranscript }]);
+
+        if (insertError) throw insertError;
+
+        setStatusMessage("✓ Securely locked in your vault!");
+        
+        // Refresh the archive list in real-time
+        await fetchAndDecryptNotes();
+      } catch (err: any) {
+        console.error("MVP Pipeline Error:", err);
+        setError(err.message || "Failed to finalize audio recording.");
+      } finally {
+        setIsSaving(false);
+        setTimeout(() => setStatusMessage(null), 3000);
+      }
+    };
+    
       recorder.start();
       setMediaRecorder(recorder);
       setAudioChunks(chunks);
