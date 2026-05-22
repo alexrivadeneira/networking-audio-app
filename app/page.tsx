@@ -16,7 +16,8 @@ export default function Home() {
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-
+  const [notes, setNotes] = useState<any[]>([]);
+  const [fetchingNotes, setFetchingNotes] = useState(true);
 
   useEffect(() => {
     // 1. Check current active session on initial load
@@ -39,6 +40,45 @@ export default function Home() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+const fetchAndDecryptNotes = async () => {
+    try {
+      setFetchingNotes(true);
+      const key = await getOrCreateEncryptionKey();
+
+      // 1. Pull the encrypted strings from Supabase
+      const { data, error: fetchError } = await supabase
+        .from('network_notes')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (fetchError) throw fetchError;
+
+      if (data) {
+        // 2. Decrypt each row locally in the browser memory
+        const decryptedRows = await Promise.all(
+          data.map(async (note: any) => {
+            const headline = await decryptData(note.encrypted_headline, key);
+            const transcript = await decryptData(note.encrypted_transcript, key);
+            return { ...note, headline, transcript };
+          })
+        );
+        setNotes(decryptedRows);
+      }
+    } catch (err: any) {
+      console.error("Failed to decrypt notes:", err);
+      setError("Could not fully decrypt your secure notes archive.");
+    } finally {
+      setFetchingNotes(false);
+    }
+  };
+
+  // Automatically trigger fetch when a user is logged in
+  useEffect(() => {
+    if (session) {
+      fetchAndDecryptNotes();
+    }
+  }, [session]);
 
   const handleInstantOnboarding = async () => {
     setAuthLoading(true);
@@ -144,6 +184,7 @@ export default function Home() {
           setError(dbError.message);
         } else {
           setStatusMessage("✓ Note safely encrypted and saved to database!");
+          await fetchAndDecryptNotes();
           setTimeout(() => setStatusMessage(null), 4000);
         }
         setIsSaving(false);
@@ -222,13 +263,49 @@ export default function Home() {
             </p>
           )}
         </div>
-
-        <p className="text-xs text-slate-400 max-w-xs mx-auto">
+<p className="text-xs text-slate-400 max-w-xs mx-auto">
           {isRecording 
             ? "Listening to your thoughts... Tap again to process seamlessly." 
             : "Tap record immediately after stepping away from a conversation to dictate what happened."}
         </p>
+      </div> {/* ← This is the end of your recording card div */}
+
+      {/* ↓ PASTE THE NEW LOGS ARCHIVE CONTAINER HERE ↓ */}
+      <div className="w-full max-w-md mt-6">
+        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Your Encrypted Log</h2>
+        
+        {fetchingNotes ? (
+          <div className="py-8 text-center bg-white rounded-xl border border-slate-100 text-xs text-slate-400">
+            Unlocking vault and decrypting archives...
+          </div>
+        ) : notes.length === 0 ? (
+          <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-200 p-6">
+            <p className="text-sm text-slate-400 font-medium">No networking notes captured yet.</p>
+            <p className="text-xs text-slate-300 mt-1">Your saved memos will compile privately here.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {notes.map((note) => (
+              <div key={note.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 text-left transition hover:border-slate-200">
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="font-bold text-slate-800 text-base leading-tight">{note.headline}</h3>
+                  <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                    {new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-600 leading-relaxed">{note.transcript}</p>
+                <div className="mt-3 pt-2.5 border-t border-slate-50">
+                  <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-medium border border-emerald-100/50">
+                    AES-GCM Decrypted
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      
     </main>
   );
 }
