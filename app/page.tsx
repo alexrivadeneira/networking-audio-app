@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from './supabase';
+import { supabase } from '../utils/supabase';
 import getOrCreateEncryptionKey, { encryptData, decryptData } from './crypto';
+import { linkToExistingContact, createNewContactAndLink } from '../utils/services/triageService';
 
 export default function Home() {
   const [session, setSession] = useState<any>(null);
@@ -18,7 +19,7 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [notes, setNotes] = useState<any[]>([]);
   const [fetchingNotes, setFetchingNotes] = useState(true);
-
+  const [triageQueue, setTriageQueue] = useState<any[]>([]);
   useEffect(() => {
     // 1. Check current active session on initial load
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -36,10 +37,43 @@ export default function Home() {
         await getOrCreateEncryptionKey().catch(console.error);
       }
       setLoading(false);
+
+      
     });
+
+    
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // --- CHOOSE THE FIRST ITEM IN THE QUEUE TO TRIAGE ---
+  const currentTriageItem = triageQueue[0] || null;
+
+  // Search local decrypted notes for matching names or aliases
+  const matchingContacts = currentTriageItem 
+    ? notes.filter(contact => 
+        contact.name?.toLowerCase() === currentTriageItem.detected_name?.toLowerCase() ||
+        contact.aliases?.some((a: string) => a.toLowerCase() === currentTriageItem.detected_name?.toLowerCase())
+      )
+    : [];
+
+  const hasMatch = matchingContacts.length > 0;
+  const suggestedContact = hasMatch ? matchingContacts[0] : null;
+
+  // Actions wired to the buttons
+  const onConfirmSuggestedMatch = async () => {
+    if (!currentTriageItem || !suggestedContact) return;
+    await linkToExistingContact(currentTriageItem.id, currentTriageItem.detected_name, suggestedContact.id, suggestedContact.aliases);
+    setTriageQueue(prev => prev.slice(1)); // Slide item out, move next one up
+    await fetchAndDecryptNotes();
+  };
+
+  const onConfirmAsNewPerson = async () => {
+    if (!currentTriageItem) return;
+    await createNewContactAndLink(currentTriageItem.id, currentTriageItem.detected_name, session?.user?.id);
+    setTriageQueue(prev => prev.slice(1));
+    await fetchAndDecryptNotes();
+  };
 
 const fetchAndDecryptNotes = async () => {
     try {
@@ -63,6 +97,24 @@ const fetchAndDecryptNotes = async () => {
             return { ...note, headline, transcript };
           })
         );
+
+        if (data) {
+  // 🔍 WITNESS 1: Look at the raw, locked blocks coming from the cloud
+  console.log("🔒 1. CLOUD STORAGE GENERATED:", data);
+
+  const decryptedRows = await Promise.all(
+    data.map(async (note: any) => {
+      const headline = await decryptData(note.encrypted_headline, key);
+      const transcript = await decryptData(note.encrypted_transcript, key);
+      
+      return { ...note, headline, transcript };
+    })
+  );
+
+  // 🔍 WITNESS 2: Look at the clean, unlocked objects ready for your UI
+  console.log("🔓 2. LOCAL MEMORY DECRYPTED:", decryptedRows);
+  setNotes(decryptedRows);
+}
         setNotes(decryptedRows);
       }
     } catch (err: any) {
@@ -157,12 +209,12 @@ const fetchAndDecryptNotes = async () => {
 
 recorder.onstop = async () => {
       const audioBlob = new Blob(chunks, { type: "audio/webm" });
-      setAudioChunks([]); // reset buffer memory immediately
+      setAudioChunks([]); // Reset buffer memory immediately
       setIsSaving(true);
       setStatusMessage("Processing voice with AI...");
 
       try {
-        // 1. Ship raw audio blob off to our backend route
+        // 1. Ship raw audio blob off to our updated backend route
         const formData = new FormData();
         formData.append("file", audioBlob, "memo.webm");
 
@@ -176,28 +228,50 @@ recorder.onstop = async () => {
           throw new Error(errData.error || "Failed to process audio.");
         }
 
-        const { transcript, headline } = await response.json();
+        // 2. Ingest our brand new detected_names array from Groq
+        const { transcript, headline, detected_names } = await response.json();
 
-        // 2. Fetch local crypto key from client browser memory
+        // 3. Fetch local crypto key from client browser memory
         setStatusMessage("Encrypting data locally...");
         const key = await getOrCreateEncryptionKey();
 
-        // 3. Securely transform plain text to ciphertext on device
+        // 4. Securely transform plain text to ciphertext on device
         const encryptedHeadline = await encryptData(headline, key);
         const encryptedTranscript = await encryptData(transcript, key);
 
-        // 4. Record payload securely to Supabase
+        // 5. Check if the AI caught any names to determine triage path
+        const needsTriage = detected_names && detected_names.length > 0;
+        const processing_status = needsTriage ? "needs_review" : "completed";
+
         const user_id = session?.user?.id;
-        const { error: insertError } = await supabase
+        const { data: newNote, error: insertError } = await supabase
           .from("network_notes")
-          .insert([{ user_id, encrypted_headline: encryptedHeadline, encrypted_transcript: encryptedTranscript }]);
+          .insert([{ 
+            user_id, 
+            encrypted_headline: encryptedHeadline, 
+            encrypted_transcript: encryptedTranscript,
+            processing_status: processing_status,
+            aliases: detected_names || [] // Seed initial tracking names array
+          }])
+          .select()
+          .single();
 
         if (insertError) throw insertError;
 
+        // 6. Push individual items directly into your local UI triage alert loop
+        if (needsTriage) {
+          const newQueueItems = detected_names.map((name: string) => ({
+            id: newNote.id,
+            detected_name: name,
+            user_id: user_id
+          }));
+          
+          setTriageQueue(prev => [...prev, ...newQueueItems]);
+        }
+
         setStatusMessage("✓ Securely locked in your vault!");
-        
-        // Refresh the archive list in real-time
         await fetchAndDecryptNotes();
+
       } catch (err: any) {
         console.error("MVP Pipeline Error:", err);
         setError(err.message || "Failed to finalize audio recording.");
@@ -207,15 +281,16 @@ recorder.onstop = async () => {
       }
     };
     
-      recorder.start();
-      setMediaRecorder(recorder);
-      setAudioChunks(chunks);
-      setIsRecording(true);
-      setError(null);
-    } catch (err) {
-      setError("Microphone access denied or unavailable.");
-    }
-  };
+    // --- KEEP THESE HARDWARE INITIALIZERS EXACTLY AS THEY WERE ---
+    recorder.start();
+    setMediaRecorder(recorder);
+    setAudioChunks(chunks);
+    setIsRecording(true);
+    setError(null);
+  } catch (err) {
+    setError("Microphone access denied or unavailable.");
+  }
+};
 
   const stopRecording = () => {
     if (mediaRecorder && isRecording) {
@@ -289,6 +364,42 @@ recorder.onstop = async () => {
 
       {/* ↓ PASTE THE NEW LOGS ARCHIVE CONTAINER HERE ↓ */}
       <div className="w-full max-w-md mt-6">
+        {/* ↓ THE PENDING TRIAGE QUEUE CARD ↓ */}
+        {currentTriageItem && (
+          <div className="bg-slate-900 border border-indigo-500/30 text-white p-4 rounded-xl shadow-md text-left mb-4">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Incoming Network Sync</h3>
+            </div>
+
+            {hasMatch ? (
+              <div>
+                <p className="text-sm text-slate-200">
+                  We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong>. Does this reference your existing contact <strong className="text-white">{suggestedContact?.name}</strong>?
+                </p>
+                <div className="flex items-center gap-2 mt-3">
+                  <button onClick={onConfirmSuggestedMatch} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition">
+                    Yes, Link Note
+                  </button>
+                  <button onClick={onConfirmAsNewPerson} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition">
+                    No, Create New Contact
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-slate-200">
+                  We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong>. It looks like they are new to your network.
+                </p>
+                <div className="flex items-center gap-2 mt-3">
+                  <button onClick={onConfirmAsNewPerson} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition">
+                    Create Contact Profile
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Your Encrypted Log</h2>
         
         {fetchingNotes ? (

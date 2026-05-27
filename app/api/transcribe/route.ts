@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     // 3. Request rapid transcription from Groq's Whisper v3 model
     const transcriptionResponse = await groq.audio.transcriptions.create({
       file: fileForGroq,
-      model: "whisper-large-v3", // Hyper-accurate, blazing fast version
+      model: "whisper-large-v3",
     });
 
     const transcript = transcriptionResponse.text;
@@ -38,28 +38,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No voice data parsed from recording." }, { status: 422 });
     }
 
-    console.log("Transcription success. Distilling headline...");
+    console.log("Transcription success. Running structural distillation...");
 
-    // 4. Use Groq's hosted Llama-3 model to instantly generate a headline
+    // 4. One single Llama call to extract the headline and names using structured JSON output
     const completionResponse = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+      model: "llama-3.1-8b-instant", // Using your active instant model
+      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
-          content: "You are an elite executive assistant. Summarize the following raw voice memo into a punchy, professional, single sentence title or headline (max 7 words). Do not include quotes, markdown bold formatting, or trailing periods.",
+          content: `You are a precise relationship data assistant. Take the raw voice transcript provided and return a JSON object with exactly three keys:
+          
+          1. "transcript": The clean, punctuated text of what was spoken.
+          2. "headline": A short, 4-7 word title summarized for a card view. Do not include quotes, markdown bold, or trailing periods.
+          3. "detected_names": An array of strings containing the unique names of human individuals mentioned in the text (e.g. ["Janie", "Mikey"]). If no specific people are named, return an empty array []. Only extract names of real individuals, not companies, products, or locations.
+          
+          Your output must strictly follow this JSON format with no additional commentary.`
         },
         {
           role: "user",
-          content: transcript,
+          content: transcript, // This is your variable holding the text string from Whisper
         },
       ],
-      max_tokens: 30,
-      temperature: 0.3,
+      temperature: 0.2,
     });
 
-    const headline = completionResponse.choices[0]?.message?.content?.trim() || "New Audio Memo";
+    // 5. Parse out the structured JSON payload returned by the model
+    const aiOutputString = completionResponse.choices[0]?.message?.content || "{}";
+    const structuredData = JSON.parse(aiOutputString);
 
-    return NextResponse.json({ transcript, headline });
+    // 6. Respond back to your frontend with all three metrics cleanly packed up
+    return NextResponse.json({
+      transcript: structuredData.transcript || transcript,
+      headline: structuredData.headline || "New Audio Memo",
+      detected_names: structuredData.detected_names || []
+    });
+
   } catch (error: any) {
     console.error("Detailed Groq API Failure:", error);
     return NextResponse.json(
