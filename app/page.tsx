@@ -57,6 +57,9 @@ export default function Home() {
   // Search local decrypted notes for matching names or aliases
 // --- CHOOSE THE FIRST ITEM IN THE QUEUE TO TRIAGE ---
   const currentTriageItem = triageQueue[0] || null;
+// Check if the user is truly signed in with an email account vs an anonymous session
+  const isAnonymousUser = session?.user?.app_metadata?.provider === 'anonymous';
+  const userEmail = session?.user?.email;
 
   // Search local decrypted notes for matching names or aliases
 const matchingContacts = currentTriageItem 
@@ -413,13 +416,20 @@ recorder.onstop = async () => {
     <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-slate-50 text-slate-900">
       <div className="w-full max-w-md bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center relative">
         
-        {/* Sign Out Top Right */}
-        <button 
-          onClick={handleSignOut}
-          className="absolute top-4 right-4 text-xs font-medium text-slate-400 hover:text-slate-600 transition"
-        >
-          Sign Out
-        </button>
+{/* User Info & Sign Out Top Right */}
+        <div className="absolute top-4 right-4 flex items-center gap-3">
+          {!isAnonymousUser && userEmail && (
+            <span className="text-[11px] font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+              👤 {userEmail}
+            </span>
+          )}
+          <button 
+            onClick={handleSignOut}
+            className="text-xs font-semibold text-slate-400 hover:text-slate-600 transition"
+          >
+            Sign Out
+          </button>
+        </div>
 
         <h1 className="text-2xl font-bold tracking-tight mb-1 mt-4">Network Notes AI</h1>
         <p className="text-xs font-semibold text-emerald-600 flex items-center justify-center gap-1 mb-6">
@@ -471,42 +481,44 @@ recorder.onstop = async () => {
         </p>
       </div> {/* ← This is the end of your recording card div */}
 
-{/* ↓ CONVERSION LANDING SIGNUP CARD ↓ */}
-      <div className="w-full max-w-md mt-6 bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-5 rounded-2xl shadow-xl border border-indigo-500/20 text-left">
-        <h3 className="font-bold text-base text-white">Secure Your Vault</h3>
-        <p className="text-xs text-indigo-200 mt-1 leading-relaxed">
-          Your networking interactions are currently saved locally to this browser session. Enter your email to encrypt your vault permanently across all devices.
-        </p>
+{/* ↓ CONVERSION LANDING SIGNUP CARD (Only visible to guest accounts) ↓ */}
+{isAnonymousUser && (
+  <div className="w-full max-w-md mt-6 bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-5 rounded-2xl shadow-xl border border-indigo-500/20 text-left">
+    <h3 className="font-bold text-base text-white">Secure Your Vault</h3>
+    <p className="text-xs text-indigo-200 mt-1 leading-relaxed">
+      Your networking interactions are currently saved locally to this browser session. Enter your email to encrypt your vault permanently across all devices.
+    </p>
 
-        <form onSubmit={handleEmailSignUp} className="mt-4 flex flex-col gap-2">
-          <input
-            type="email"
-            placeholder="Enter your email address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={isSubmittingAuth}
-            required
-            className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-white transition disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={isSubmittingAuth}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-2 text-xs font-bold transition shadow-sm disabled:opacity-50"
-          >
-            {isSubmittingAuth ? 'Securing Link...' : 'Claim My Encrypted Vault'}
-          </button>
-        </form>
+    <form onSubmit={handleEmailSignUp} className="mt-4 flex flex-col gap-2">
+      <input
+        type="email"
+        placeholder="Enter your email address"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        disabled={isSubmittingAuth}
+        required
+        className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-white transition disabled:opacity-50"
+      />
+      <button
+        type="submit"
+        disabled={isSubmittingAuth}
+        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-2 text-xs font-bold transition shadow-sm disabled:opacity-50"
+      > {/* Fixed tag opening */}
+        {isSubmittingAuth ? 'Securing Link...' : 'Claim My Encrypted Vault'}
+      </button>
+    </form>
 
-        {authMessage && (
-          <div className={`mt-3 p-2.5 rounded-lg text-xs font-medium border ${
-            authMessage.type === 'success' 
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' 
-              : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
-          }`}>
-            {authMessage.text}
-          </div>
-        )}
+    {authMessage && (
+      <div className={`mt-3 p-2.5 rounded-lg text-xs font-medium border ${
+        authMessage.type === 'success' 
+          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' 
+          : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+      }`}>
+        {authMessage.text}
       </div>
+    )}
+  </div>
+)}
 
 
 {/* ↓ TABS CONTROLLER ↓ */}
