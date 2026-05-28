@@ -22,7 +22,7 @@ export default function Home() {
   const [notes, setNotes] = useState<any[]>([]);
   const [fetchingNotes, setFetchingNotes] = useState(true);
   const [triageQueue, setTriageQueue] = useState<any[]>([]);
-
+const [mergeTargetName, setMergeTargetName] = useState<string>('');
 
   const [email, setEmail] = useState('');
   const [authMessage, setAuthMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -30,6 +30,7 @@ export default function Home() {
 
   const [authView, setAuthView] = useState<'landing' | 'login'>('landing');
 
+  
   useEffect(() => {
     // 1. Check current active session on initial load
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -98,26 +99,7 @@ const matchingContacts = currentTriageItem
     }
   };
 
-  const onConfirmAsNewPerson = async () => {
-    if (!currentTriageItem) return;
 
-    console.log("➡️ Attempting to triage item ID:", currentTriageItem.id);
-    
-    const res = await createNewContactAndLink(
-      currentTriageItem.id, 
-      currentTriageItem.detected_name, 
-      session?.user?.id
-    );
-
-    console.log("🏁 Service execution result:", res);
-
-    if (res.success) {
-      setTriageQueue(prev => prev.slice(1));
-      await fetchAndDecryptNotes();
-    } else {
-      setError("Failed to create new contact profile.");
-    }
-  };
 
 const fetchAndDecryptNotes = async () => {
     try {
@@ -259,6 +241,94 @@ const handleEmailSignUp = async (e: React.FormEvent) => {
     await supabase.auth.signOut();
   };
 
+  const updateTriageContact = async (noteId: string, contactName: string) => {
+    // We update the specific row inside your table with the targeted contact string
+    const { data, error } = await supabase
+      .from('network_notes')
+      .update({ 
+        contact_name: contactName,
+        processing_status: 'completed' // Marks the pipeline loop as officially processed
+      })
+      .eq('id', noteId)
+      .select();
+
+    if (error) {
+      console.error("Supabase update failure:", error.message);
+      throw error;
+    }
+    return data;
+  };
+
+const onConfirmMatchWithName = async (targetName: string) => {
+    if (!currentTriageItem) return;
+    
+    try {
+      // 1. Direct mutation helper to lock the target string into the DB row
+      await updateTriageContact(currentTriageItem.id, targetName);
+      
+      // 2. Update local application notes state dynamically so UI updates instantly
+      setNotes(prev => prev.map(n => 
+        n.id === currentTriageItem.id ? { ...n, contact_name: targetName } : n
+      ));
+      
+      // 3. REMOVE FROM QUEUE: Drop the first item we just processed
+      setTriageQueue(prev => prev.slice(1));
+      
+    } catch (err) {
+      console.error("Error merging contact nickname:", err);
+    }
+  };
+
+const onConfirmAsNewPerson = async () => {
+    if (!currentTriageItem) return;
+
+    try {
+      const targetName = currentTriageItem.detected_name;
+      
+      await updateTriageContact(currentTriageItem.id, targetName);
+      setTriageQueue(prev => prev.slice(1));
+
+      setNotes(prev => {
+        const exists = prev.some(n => n.id === currentTriageItem.id);
+        if (exists) {
+          return prev.map(n => 
+            n.id === currentTriageItem.id 
+              ? { ...n, contact_name: targetName, processing_status: 'completed' } 
+              : n
+          );
+        } else {
+          return [
+            { ...currentTriageItem, contact_name: targetName, processing_status: 'completed' },
+            ...prev
+          ];
+        }
+      });
+      
+    } catch (err) {
+      console.error("Error creating fresh profile contact:", err);
+    }
+  };
+  
+
+  const handleStartGuestSession = async () => {
+    setIsSubmittingAuth(true);
+    setAuthMessage(null);
+    try {
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (error) throw error;
+      // Your existing Supabase auth state listener will automatically 
+      // see this new session and unlock the main dashboard!
+    } catch (err: any) {
+      console.error("Failed to start guest session:", err);
+      setAuthMessage({
+        type: 'error',
+        text: err.message || 'Could not start guest session. Please try again.'
+      });
+    } finally {
+      setIsSubmittingAuth(false);
+    }
+  };
+
   // 📇 DERIVED ROLODEX LOGIC: Extract unique contacts from decrypted notes
   const contactsDirectory = notes.reduce((acc: Record<string, any[]>, note) => {
     if (note.contact_name && note.processing_status === 'completed') {
@@ -286,27 +356,32 @@ const handleEmailSignUp = async (e: React.FormEvent) => {
 
   // VIEW 1: Onboarding Card (If user is NOT logged in yet)
 // ↓ UNAUTHENTICATED LANDING & LOGIN PORTAL ↓
+// ↓ UNAUTHENTICATED LANDING & LOGIN PORTAL ↓
   if (!session) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6 text-center">
         {authView === 'landing' ? (
-          /* A: THE AUTOMATED GETTING STARTED / LOADING VIEW */
+          /* A: THE STANDARD GETTING STARTED VIEW */
           <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-slate-100 flex flex-col items-center">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-xl font-bold shadow-md shadow-indigo-200 mb-4 animate-pulse">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-xl font-bold shadow-md shadow-indigo-200 mb-4">
               🎙️
             </div>
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Private Network Ledger</h1>
             <p className="text-xs text-slate-500 mt-2 max-w-xs leading-relaxed">
-              Preparing your private ledger vault...
+              Record voice summaries of your local interactions. Encrypted instantly via local browser AES keys.
             </p>
             
-            <div className="w-full bg-slate-100 h-2 rounded-full mt-6 overflow-hidden">
-              <div className="bg-indigo-600 h-full rounded-full animate-infinite-scroll w-1/3"></div>
-            </div>
+            <button
+              onClick={handleStartGuestSession}
+              disabled={isSubmittingAuth}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-3 text-sm font-bold mt-6 transition shadow-md disabled:opacity-50"
+            >
+              {isSubmittingAuth ? 'Opening Vault...' : 'Start Recording Asynchronously'}
+            </button>
 
             <button
               onClick={() => setAuthView('login')}
-              className="mt-6 text-xs font-semibold text-indigo-600 hover:text-indigo-500 transition"
+              className="mt-4 text-xs font-semibold text-indigo-600 hover:text-indigo-500 transition"
             >
               Already have an encrypted vault? Sign In
             </button>
@@ -467,6 +542,8 @@ recorder.onstop = async () => {
     }
   };
 
+  
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-slate-50 text-slate-900">
       <div className="w-full max-w-md bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center relative">
@@ -605,38 +682,70 @@ recorder.onstop = async () => {
       <div className="w-full max-w-md mt-6">
         
         {/* Always display incoming triage flags at the top regardless of current tab */}
+{/* Always display incoming triage flags at the top regardless of current tab */}
         {currentTriageItem && (
-          <div className="bg-slate-900 border border-indigo-500/30 text-white p-4 rounded-xl shadow-md text-left mb-6">
-            <div className="flex items-center gap-1.5 mb-2">
+          <div className="bg-slate-900 border border-indigo-500/30 text-white p-5 rounded-2xl shadow-lg text-left mb-6">
+            <div className="flex items-center gap-1.5 mb-2.5">
               <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Incoming Network Sync</h3>
             </div>
-            {hasMatch ? (
-              <div>
-                <p className="text-sm text-slate-200">
-                  We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong>. Link to existing contact <strong className="text-white">{suggestedContact?.contact_name}</strong>?
+            
+            <p className="text-sm text-slate-200 leading-relaxed">
+              We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong> inside this interaction.
+            </p>
+
+            {/* Smart linking suggestion block */}
+            {hasMatch && (
+              <div className="mt-3 p-3 bg-indigo-950/40 border border-indigo-500/10 rounded-xl">
+                <p className="text-xs text-indigo-200">
+                  Looks like an existing match: <strong className="text-white">"{suggestedContact?.contact_name}"</strong>
                 </p>
-                <div className="flex items-center gap-2 mt-3">
-                  <button onClick={onConfirmSuggestedMatch} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition">
-                    Yes, Link Note
-                  </button>
-                  <button onClick={onConfirmAsNewPerson} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition">
-                    No, Create New Contact
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm text-slate-200">
-                  We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong>.
-                </p>
-                <div className="flex items-center gap-2 mt-3">
-                  <button onClick={onConfirmAsNewPerson} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition">
-                    Create Contact Profile
-                  </button>
-                </div>
+                <button 
+                  onClick={onConfirmSuggestedMatch} 
+                  className="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg py-1.5 text-xs font-semibold transition"
+                >
+                  Yes, Link to {suggestedContact?.contact_name}
+                </button>
               </div>
             )}
+
+            {/* Manual Merge or Create New Interface */}
+            <div className="mt-4 pt-3.5 border-t border-slate-800 flex flex-col gap-2.5">
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                Or choose action manually:
+              </label>
+              
+              <div className="flex gap-2">
+                {sortedContactNames.length > 0 && (
+                  <select
+                    value={mergeTargetName}
+                    onChange={(e) => setMergeTargetName(e.target.value)}
+                    className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">-- Merge into existing --</option>
+                    {sortedContactNames.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                )}
+
+                <button
+                  onClick={() => {
+                    if (mergeTargetName) {
+                      // Merge: link the note to the chosen contact name
+                      onConfirmMatchWithName(mergeTargetName);
+                      setMergeTargetName('');
+                    } else {
+                      // Create brand new profile using the exact text detected
+                      onConfirmAsNewPerson();
+                    }
+                  }}
+                  className="px-3 py-2 bg-slate-850 hover:bg-slate-800 border border-slate-700 text-white rounded-xl text-xs font-bold transition shadow-sm whitespace-nowrap"
+                >
+                  {mergeTargetName ? 'Confirm Merge' : 'Create New Profile'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
