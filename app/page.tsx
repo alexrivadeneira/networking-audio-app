@@ -10,6 +10,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'memos' | 'rolodex'>('memos');
+  const [selectedContact, setSelectedContact] = useState<string | null>(null);
 
   // recording state gooks
   const [isRecording, setIsRecording] = useState(false);
@@ -20,6 +22,7 @@ export default function Home() {
   const [notes, setNotes] = useState<any[]>([]);
   const [fetchingNotes, setFetchingNotes] = useState(true);
   const [triageQueue, setTriageQueue] = useState<any[]>([]);
+
   useEffect(() => {
     // 1. Check current active session on initial load
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -201,6 +204,22 @@ useEffect(() => {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
+
+  // 📇 DERIVED ROLODEX LOGIC: Extract unique contacts from decrypted notes
+  const contactsDirectory = notes.reduce((acc: Record<string, any[]>, note) => {
+    if (note.contact_name && note.processing_status === 'completed') {
+      if (!acc[note.contact_name]) {
+        acc[note.contact_name] = [];
+      }
+      acc[note.contact_name].push(note);
+    }
+    return acc;
+  }, {});
+
+  // Sort names alphabetically for a true Rolodex feel
+  const sortedContactNames = Object.keys(contactsDirectory).sort((a, b) => 
+    a.localeCompare(b)
+  );
 
   // Loading state placeholder while checking browser cookies/tokens
   if (loading) {
@@ -416,33 +435,50 @@ recorder.onstop = async () => {
         </p>
       </div> {/* ← This is the end of your recording card div */}
 
-      {/* ↓ PASTE THE NEW LOGS ARCHIVE CONTAINER HERE ↓ */}
+{/* ↓ TABS CONTROLLER ↓ */}
+      <div className="w-full max-w-md mt-6 flex border-b border-slate-200">
+        <button
+          onClick={() => { setActiveTab('memos'); setSelectedContact(null); }}
+          className={`flex-1 pb-3 text-sm font-semibold border-b-2 transition ${
+            activeTab === 'memos' 
+              ? 'border-emerald-600 text-emerald-600' 
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          Memos Timeline
+        </button>
+        <button
+          onClick={() => setActiveTab('rolodex')}
+          className={`flex-1 pb-3 text-sm font-semibold border-b-2 transition ${
+            activeTab === 'rolodex' 
+              ? 'border-emerald-600 text-emerald-600' 
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          Network Rolodex ({sortedContactNames.length})
+        </button>
+      </div>
+
+      {/* Main Content View Switcher Container */}
       <div className="w-full max-w-md mt-6">
-        {/* ↓ THE PENDING TRIAGE QUEUE CARD ↓ */}
-{/* ↓ THE PENDING TRIAGE QUEUE CARD ↓ */}
+        
+        {/* Always display incoming triage flags at the top regardless of current tab */}
         {currentTriageItem && (
-          <div className="bg-slate-900 border border-indigo-500/30 text-white p-4 rounded-xl shadow-md text-left mb-4">
+          <div className="bg-slate-900 border border-indigo-500/30 text-white p-4 rounded-xl shadow-md text-left mb-6">
             <div className="flex items-center gap-1.5 mb-2">
               <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Incoming Network Sync</h3>
             </div>
-
             {hasMatch ? (
               <div>
                 <p className="text-sm text-slate-200">
-                  We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong>. Does this reference your existing contact <strong className="text-white">{suggestedContact?.contact_name}</strong>?
+                  We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong>. Link to existing contact <strong className="text-white">{suggestedContact?.contact_name}</strong>?
                 </p>
                 <div className="flex items-center gap-2 mt-3">
-                  <button 
-                    onClick={onConfirmSuggestedMatch} 
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition"
-                  >
+                  <button onClick={onConfirmSuggestedMatch} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition">
                     Yes, Link Note
                   </button>
-                  <button 
-                    onClick={onConfirmAsNewPerson} 
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition"
-                  >
+                  <button onClick={onConfirmAsNewPerson} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition">
                     No, Create New Contact
                   </button>
                 </div>
@@ -450,13 +486,10 @@ recorder.onstop = async () => {
             ) : (
               <div>
                 <p className="text-sm text-slate-200">
-                  We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong>. It looks like they are new to your network.
+                  We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong>.
                 </p>
                 <div className="flex items-center gap-2 mt-3">
-                  <button 
-                    onClick={onConfirmAsNewPerson} 
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition"
-                  >
+                  <button onClick={onConfirmAsNewPerson} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition">
                     Create Contact Profile
                   </button>
                 </div>
@@ -464,40 +497,117 @@ recorder.onstop = async () => {
             )}
           </div>
         )}
-        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Your Encrypted Log</h2>
-        
-        {fetchingNotes ? (
-          <div className="py-8 text-center bg-white rounded-xl border border-slate-100 text-xs text-slate-400">
-            Unlocking vault and decrypting archives...
-          </div>
-        ) : notes.length === 0 ? (
-          <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-200 p-6">
-            <p className="text-sm text-slate-400 font-medium">No networking notes captured yet.</p>
-            <p className="text-xs text-slate-300 mt-1">Your saved memos will compile privately here.</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {notes.map((note) => (
-              <div key={note.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 text-left transition hover:border-slate-200">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold text-slate-800 text-base leading-tight">{note.headline}</h3>
-                  <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-                    {new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  </span>
+
+        {/* VIEW A: MEMOS TIMELINE FLOW */}
+        {activeTab === 'memos' && (
+          <>
+            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Your Encrypted Log</h2>
+            {fetchingNotes ? (
+              <div className="py-8 text-center bg-white rounded-xl border border-slate-100 text-xs text-slate-400">
+                Unlocking vault and decrypting archives...
+              </div>
+            ) : notes.length === 0 ? (
+              <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-200 p-6">
+                <p className="text-sm text-slate-400 font-medium">No networking notes captured yet.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {notes.map((note) => (
+                  <div key={note.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 text-left transition hover:border-slate-200">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-bold text-slate-800 text-base leading-tight">{note.headline}</h3>
+                      <span className="text-[10px] text-slate-400 font-medium bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                        {new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed">{note.transcript}</p>
+                    <div className="mt-3 pt-2.5 border-t border-slate-50 flex items-center justify-between">
+                      <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-medium border border-emerald-100/50">
+                        AES-GCM Decrypted
+                      </span>
+                      {note.contact_name && (
+                        <span className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded font-semibold border border-indigo-100/50">
+                          👤 {note.contact_name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* VIEW B: THE CONTACTS ROLODEX */}
+        {activeTab === 'rolodex' && (
+          <div>
+            {!selectedContact ? (
+              <>
+                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Directory</h2>
+                {sortedContactNames.length === 0 ? (
+                  <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-200 text-sm text-slate-400">
+                    Triage your memos to populate your contact Rolodex.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2">
+                    {sortedContactNames.map((name) => (
+                      <button
+                        key={name}
+                        onClick={() => setSelectedContact(name)}
+                        className="w-full bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-left flex items-center justify-between hover:border-slate-300 transition"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-sm font-bold text-emerald-700">
+                            {name[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-slate-800 text-sm">{name}</span>
+                            <p className="text-[11px] text-slate-400">{contactsDirectory[name].length} context dynamic interactions</p>
+                          </div>
+                        </div>
+                        <span className="text-slate-300 font-bold">→</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              /* INDIVIDUAL DRILL DOWN DRAWER */
+              <div>
+                <button
+                  onClick={() => setSelectedContact(null)}
+                  className="mb-4 text-xs font-semibold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition"
+                >
+                  ← Back to Directory
+                </button>
+                
+                <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm text-left mb-4">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-lg font-bold text-emerald-800 mb-2">
+                    {selectedContact[0].toUpperCase()}
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-900">{selectedContact}</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">Compiled Network Timeline Context</p>
                 </div>
-                <p className="text-sm text-slate-600 leading-relaxed">{note.transcript}</p>
-                <div className="mt-3 pt-2.5 border-t border-slate-50">
-                  <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-medium border border-emerald-100/50">
-                    AES-GCM Decrypted
-                  </span>
+
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Linked Interactions</h3>
+                <div className="flex flex-col gap-3">
+                  {contactsDirectory[selectedContact].map((note) => (
+                    <div key={note.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-left">
+                      <div className="flex justify-between items-start mb-1.5">
+                        <h4 className="font-bold text-slate-800 text-sm">{note.headline}</h4>
+                        <span className="text-[9px] text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                          {new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">{note.transcript}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
-
-      
     </main>
   );
 }
