@@ -1,80 +1,66 @@
-import { supabase } from "../supabase";
+import { supabase } from '../supabase';
 
 /**
- * PATH 1 & 4: Link a note to an existing contact name 
- * and passively append any new nickname to their alias list across records.
+ * ACTION 1: Initialize a contact entry path by upgrading the current note 
+ * to act as the primary profile anchor.
  */
-export async function linkToExistingContact(
-  noteId: string, 
-  spokenName: string, 
-  targetContactName: string, 
-  currentAliases: string[] = []
-) {
+export async function createNewContactAndLink(noteId: string, name: string, userId: string) {
   try {
-    // 1. Stamp the target contact's master name onto this note entry
-    const { error: noteError } = await supabase
-      .from("network_notes")
+    console.log(`Creating contact profile text entry for: ${name} on Note ID: ${noteId}`);
+    const { data, error } = await supabase
+      .from('network_notes')
       .update({
-        contact_name: targetContactName,
-        processing_status: "completed"
+        contact_name: name, // Fill the text marker name column
+        processing_status: 'completed' // Mark this specific row task clear
       })
-      .eq("id", noteId);
+      .eq('id', noteId) // ◄ Rely cleanly on the unique Note UUID match
+      .select();
 
-    if (noteError) throw noteError;
+      console.log("🔥 Supabase direct mutation return row:", data);
 
-    // 2. Train the system: Add the nickname to the alias list if it's missing
-    const cleanSpokenName = spokenName.trim();
-    const aliasExists = currentAliases.some(
-      (a) => a.toLowerCase() === cleanSpokenName.toLowerCase()
-    );
+    if (error) throw error;
 
-    if (!aliasExists && cleanSpokenName !== "") {
-      const updatedAliases = [...currentAliases, cleanSpokenName];
-      
-      // Update the alias array on all records sharing this master contact name
-      const { error: aliasError } = await supabase
-        .from("network_notes")
-        .update({ aliases: updatedAliases })
-        .eq("contact_name", targetContactName);
-
-      if (aliasError) throw aliasError;
-      console.log(`PASSIVE LEARNING: Linked "${cleanSpokenName}" to ${targetContactName}`);
+    if (!data || data.length === 0) {
+      console.warn("⚠️ RLS GUARD TRIGGERED: Supabase found the row but refused to alter it. Check your table's UPDATE policies.");
+    } else {
+      console.log("🔥 Supabase direct mutation return row:", data);
     }
-
-    return { success: true };
+    
+    return { success: data && data.length > 0 };
   } catch (err) {
-    console.error("Failed to merge triage entry:", err);
+    console.error("triageService [createNewContactAndLink] Failure:", err);
     return { success: false, error: err };
   }
 }
 
 /**
- * PATH 3: Initialize a brand new contact profile directly on this note item
+ * ACTION 2: Link an alias name directly to a master profile row name context
  */
-export async function createNewContactAndLink(
+export async function linkToExistingContact(
   noteId: string, 
-  newName: string, 
-  userId: string
+  detectedName: string, 
+  existingContactName: string, 
+  currentAliases: string[]
 ) {
   try {
-    const cleanName = newName.trim();
+    console.log(`Linking alias "${detectedName}" to master contact profile "${existingContactName}"`);
 
-    // Set this note's master contact name, and seed its alias index with itself
+    // Ensure we don't push duplicate string tags into the tracking index
+    const updatedAliases = Array.from(new Set([...currentAliases, detectedName]));
+
     const { error } = await supabase
-      .from("network_notes")
+      .from('network_notes')
       .update({
-        contact_name: cleanName,
-        aliases: [cleanName],
-        processing_status: "completed"
+        contact_name: existingContactName, // Associate this text group cluster
+        aliases: updatedAliases, // Store the appended tracking string slice
+        processing_status: 'completed' // Clear the flag
       })
-      .eq("id", noteId);
+      .eq('id', noteId); // ◄ Rely cleanly on the unique Note UUID match
 
     if (error) throw error;
-
-    console.log(`DIRECTORY EXPANDED: Created profile for "${cleanName}"`);
     return { success: true };
   } catch (err) {
-    console.error("Failed to establish new contact profile:", err);
+    console.error("triageService [linkToExistingContact] Failure:", err);
     return { success: false, error: err };
   }
 }

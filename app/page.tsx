@@ -46,33 +46,64 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- CHOOSE THE FIRST ITEM IN THE QUEUE TO TRIAGE ---
+  // Search local decrypted notes for matching names or aliases
+// --- CHOOSE THE FIRST ITEM IN THE QUEUE TO TRIAGE ---
   const currentTriageItem = triageQueue[0] || null;
 
   // Search local decrypted notes for matching names or aliases
-  const matchingContacts = currentTriageItem 
-    ? notes.filter(contact => 
-        contact.name?.toLowerCase() === currentTriageItem.detected_name?.toLowerCase() ||
-        contact.aliases?.some((a: string) => a.toLowerCase() === currentTriageItem.detected_name?.toLowerCase())
+const matchingContacts = currentTriageItem 
+    ? notes.filter(note => 
+        note.processing_status === "completed" && note.contact_name && (
+          note.contact_name.toLowerCase() === currentTriageItem.detected_name.toLowerCase() ||
+          note.aliases?.some((a: string) => a.toLowerCase() === currentTriageItem.detected_name.toLowerCase())
+        )
       )
     : [];
 
   const hasMatch = matchingContacts.length > 0;
+  // Grab the master note where this contact profile was first established
   const suggestedContact = hasMatch ? matchingContacts[0] : null;
-
-  // Actions wired to the buttons
+// Actions wired to your triage buttons
   const onConfirmSuggestedMatch = async () => {
     if (!currentTriageItem || !suggestedContact) return;
-    await linkToExistingContact(currentTriageItem.id, currentTriageItem.detected_name, suggestedContact.id, suggestedContact.aliases);
-    setTriageQueue(prev => prev.slice(1)); // Slide item out, move next one up
-    await fetchAndDecryptNotes();
+    
+    // Pass the correct structural variables to your single-table backend service
+    const res = await linkToExistingContact(
+      currentTriageItem.id, 
+      currentTriageItem.detected_name, 
+      suggestedContact.contact_name, // Match on the single table's master name column
+      suggestedContact.aliases || []
+    );
+
+    if (res.success) {
+      // Force local slice mutation immediately so the card slides away without lag
+      setTriageQueue(prev => prev.slice(1)); 
+      // Re-trigger your local decryption sweep to download the newly updated rows
+      await fetchAndDecryptNotes();
+    } else {
+      setError("Failed to link alias to existing profile.");
+    }
   };
 
   const onConfirmAsNewPerson = async () => {
     if (!currentTriageItem) return;
-    await createNewContactAndLink(currentTriageItem.id, currentTriageItem.detected_name, session?.user?.id);
-    setTriageQueue(prev => prev.slice(1));
-    await fetchAndDecryptNotes();
+
+    console.log("➡️ Attempting to triage item ID:", currentTriageItem.id);
+    
+    const res = await createNewContactAndLink(
+      currentTriageItem.id, 
+      currentTriageItem.detected_name, 
+      session?.user?.id
+    );
+
+    console.log("🏁 Service execution result:", res);
+
+    if (res.success) {
+      setTriageQueue(prev => prev.slice(1));
+      await fetchAndDecryptNotes();
+    } else {
+      setError("Failed to create new contact profile.");
+    }
   };
 
 const fetchAndDecryptNotes = async () => {
@@ -88,34 +119,38 @@ const fetchAndDecryptNotes = async () => {
 
       if (fetchError) throw fetchError;
 
-      if (data) {
-        // 2. Decrypt each row locally in the browser memory
+if (data) {
+        console.log("🔒 1. CLOUD STORAGE GENERATED:", data);
+
+        // Decrypt each row locally inside your browser memory
         const decryptedRows = await Promise.all(
           data.map(async (note: any) => {
-            const headline = await decryptData(note.encrypted_headline, key);
-            const transcript = await decryptData(note.encrypted_transcript, key);
-            return { ...note, headline, transcript };
+            try {
+              const headline = await decryptData(note.encrypted_headline, key);
+              const transcript = await decryptData(note.encrypted_transcript, key);
+              return { ...note, headline, transcript };
+            } catch (decHalt) {
+              return { ...note, headline: "Encrypted Entry", transcript: "Decryption unavailable." };
+            }
           })
         );
 
-        if (data) {
-  // 🔍 WITNESS 1: Look at the raw, locked blocks coming from the cloud
-  console.log("🔒 1. CLOUD STORAGE GENERATED:", data);
-
-  const decryptedRows = await Promise.all(
-    data.map(async (note: any) => {
-      const headline = await decryptData(note.encrypted_headline, key);
-      const transcript = await decryptData(note.encrypted_transcript, key);
-      
-      return { ...note, headline, transcript };
-    })
-  );
-
-  // 🔍 WITNESS 2: Look at the clean, unlocked objects ready for your UI
-  console.log("🔓 2. LOCAL MEMORY DECRYPTED:", decryptedRows);
-  setNotes(decryptedRows);
-}
+        console.log("🔓 2. LOCAL MEMORY DECRYPTED:", decryptedRows);
+        
+        // 1. Update your notes archive list
         setNotes(decryptedRows);
+
+        // 2. ⚡ ADD THIS: Look for unreviewed names and load them into your triage cards!
+        const unreviewedItems = decryptedRows
+          .filter((note: any) => note.processing_status === "needs_review")
+          .flatMap((note: any) => 
+            (note.aliases || []).map((name: string) => ({
+              id: note.id,
+              detected_name: name
+            }))
+          );
+        
+        setTriageQueue(unreviewedItems);
       }
     } catch (err: any) {
       console.error("Failed to decrypt notes:", err);
@@ -125,12 +160,31 @@ const fetchAndDecryptNotes = async () => {
     }
   };
 
-  // Automatically trigger fetch when a user is logged in
-  useEffect(() => {
-    if (session) {
-      fetchAndDecryptNotes();
-    }
-  }, [session]);
+useEffect(() => {
+    // 1. Check current active session on initial page load
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        getOrCreateEncryptionKey().catch(console.error);
+        // 🎬 Sync and decrypt the rows immediately on verification
+        fetchAndDecryptNotes(); 
+      }
+      setLoading(false);
+    });
+
+    // 2. Listen for real-time auth changes (sign-ins, sign-outs)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      setSession(currentSession);
+      if (currentSession) {
+        await getOrCreateEncryptionKey().catch(console.error);
+        // 🎬 Sync when a user signs in dynamically
+        fetchAndDecryptNotes();
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []); // ◄ Stable empty dependency matrix stops re-renders completely!
 
   const handleInstantOnboarding = async () => {
     setAuthLoading(true);
@@ -266,7 +320,7 @@ recorder.onstop = async () => {
             user_id: user_id
           }));
           
-          setTriageQueue(prev => [...prev, ...newQueueItems]);
+          // setTriageQueue(prev => [...prev, ...newQueueItems]);
         }
 
         setStatusMessage("✓ Securely locked in your vault!");
@@ -365,6 +419,7 @@ recorder.onstop = async () => {
       {/* ↓ PASTE THE NEW LOGS ARCHIVE CONTAINER HERE ↓ */}
       <div className="w-full max-w-md mt-6">
         {/* ↓ THE PENDING TRIAGE QUEUE CARD ↓ */}
+{/* ↓ THE PENDING TRIAGE QUEUE CARD ↓ */}
         {currentTriageItem && (
           <div className="bg-slate-900 border border-indigo-500/30 text-white p-4 rounded-xl shadow-md text-left mb-4">
             <div className="flex items-center gap-1.5 mb-2">
@@ -375,13 +430,19 @@ recorder.onstop = async () => {
             {hasMatch ? (
               <div>
                 <p className="text-sm text-slate-200">
-                  We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong>. Does this reference your existing contact <strong className="text-white">{suggestedContact?.name}</strong>?
+                  We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong>. Does this reference your existing contact <strong className="text-white">{suggestedContact?.contact_name}</strong>?
                 </p>
                 <div className="flex items-center gap-2 mt-3">
-                  <button onClick={onConfirmSuggestedMatch} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition">
+                  <button 
+                    onClick={onConfirmSuggestedMatch} 
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition"
+                  >
                     Yes, Link Note
                   </button>
-                  <button onClick={onConfirmAsNewPerson} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition">
+                  <button 
+                    onClick={onConfirmAsNewPerson} 
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition"
+                  >
                     No, Create New Contact
                   </button>
                 </div>
@@ -392,7 +453,10 @@ recorder.onstop = async () => {
                   We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong>. It looks like they are new to your network.
                 </p>
                 <div className="flex items-center gap-2 mt-3">
-                  <button onClick={onConfirmAsNewPerson} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition">
+                  <button 
+                    onClick={onConfirmAsNewPerson} 
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition"
+                  >
                     Create Contact Profile
                   </button>
                 </div>
