@@ -83,6 +83,7 @@ const fetchAndDecryptNotes = async (shouldLoadQueue = false) => {
       setFetchingNotes(true);
       const key = await getOrCreateEncryptionKey();
 
+      // 1. Fetch notes
       const { data, error: fetchError } = await supabase
         .from('network_notes')
         .select('*')
@@ -90,23 +91,44 @@ const fetchAndDecryptNotes = async (shouldLoadQueue = false) => {
 
       if (fetchError) throw fetchError;
 
+      // 2. Fetch the Junction Table links (The "Glue")
+      const { data: linksData, error: linksError } = await supabase
+        .from('note_contacts')
+        .select('note_id, contacts(name)'); 
+
+      if (linksError) throw linksError;
+
       if (data) {
         const decryptedRows = await Promise.all(
           data.map(async (note: any) => {
+            // Find which contacts belong to this specific note
+            const associatedContacts = linksData
+              ?.filter((link: any) => link.note_id === note.id)
+              .map((link: any) => (link.contacts as any)?.name) || [];
+
             try {
               const headline = await decryptData(note.encrypted_headline, key);
               const transcript = await decryptData(note.encrypted_transcript, key);
-              return { ...note, headline, transcript };
+              return { 
+                ...note, 
+                headline, 
+                transcript, 
+                associated_contact_names: associatedContacts // ◄ Hydrated names
+              };
             } catch (decHalt) {
-              return { ...note, headline: "Encrypted Entry", transcript: "Decryption unavailable." };
+              return { 
+                ...note, 
+                headline: "Encrypted Entry", 
+                transcript: "Decryption unavailable.", 
+                associated_contact_names: associatedContacts 
+              };
             }
           })
         );
         
         setNotes(decryptedRows);
 
-        // ─── ADDED THIS BLOCK HERE ───
-        // Fetch your clean, raw contacts table to populate the Rolodex state directly
+        // 3. Fetch Master Contacts List for the Rolodex sidebar
         const { data: fetchedContacts, error: contactsError } = await supabase
           .from('contacts')
           .select('*')
@@ -115,12 +137,10 @@ const fetchAndDecryptNotes = async (shouldLoadQueue = false) => {
         if (contactsError) {
           console.error("❌ Error fetching master contacts table:", contactsError.message);
         } else if (fetchedContacts) {
-          setContactsList(fetchedContacts); // Updates your [contactsList, setContactsList] state
+          setContactsList(fetchedContacts); 
         }
-        // ──────────────────────────────
 
-        // ONLY update triageQueue structure when explicitly told to do so (like at page load)
-        // This stops database updates from stamping over manual local loop modifications!
+        // 4. Queue processing logic
         if (shouldLoadQueue) {
           const unreviewedItems = decryptedRows
             .filter((note: any) => note.processing_status === "needs_review")
@@ -399,16 +419,19 @@ const onConfirmMatchWithName = async (targetName: string) => {
   };
 
 // --- DERIVED ROLODEX LOGIC (UPDATED FOR RELATIONAL MODEL) ---
-  const contactsDirectory = contactsList.reduce((acc: Record<string, any[]>, contact) => {
+const contactsDirectory = contactsList.reduce((acc: Record<string, any[]>, contact) => {
     // 1. Initialize an empty history array for EVERY person in your database
     if (!acc[contact.name]) {
       acc[contact.name] = [];
     }
     
-    // 2. Scan your existing notes array. If a note belongs to this contact, link it!
-    // (We look at note.contact_name for your single test note, or we can expand this soon)
-    notes.forEach((note) => {
-      if (note.processing_status === 'completed' && note.contact_name?.includes(contact.name)) {
+    // 2. Scan your notes using the new hydrated array
+    notes.forEach((note: any) => {
+      // We check our new array instead of the old string!
+      if (
+        note.processing_status === 'completed' && 
+        note.associated_contact_names?.includes(contact.name)
+      ) {
         acc[contact.name].push(note);
       }
     });
