@@ -354,8 +354,7 @@ const onConfirmAsNewPerson = async () => {
     );
   }
 
-  // VIEW 1: Onboarding Card (If user is NOT logged in yet)
-// ↓ UNAUTHENTICATED LANDING & LOGIN PORTAL ↓
+// VIEW 1: Onboarding Card (If user is NOT logged in yet)
 // ↓ UNAUTHENTICATED LANDING & LOGIN PORTAL ↓
   if (!session) {
     return (
@@ -544,321 +543,355 @@ recorder.onstop = async () => {
 
   
 
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-slate-50 text-slate-900">
-      <div className="w-full max-w-md bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center relative">
-        
-{/* User Info & Sign Out Top Right */}
-        <div className="absolute top-4 right-4 flex items-center gap-3">
-          {!isAnonymousUser && userEmail && (
-            <span className="text-[11px] font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-              👤 {userEmail}
-            </span>
-          )}
-          <button 
-            onClick={handleSignOut}
-            className="text-xs font-semibold text-slate-400 hover:text-slate-600 transition"
-          >
-            Sign Out
-          </button>
-        </div>
+return (
+<main className="flex min-h-screen flex-col items-center justify-center p-4 bg-[#f7f7ed] text-[#3c5671]">
+  <div className="w-full max-w-md bg-white p-6 rounded-2xl shadow-xl shadow-[#dfcaab]/30 border border-[#dfcaab] text-center relative">
+    
+    {/* LEVEL TOP ROW: BRANDING LEFT, UTILITIES RIGHT */}
+    <div className="flex flex-row items-center justify-between w-full border-b border-[#dfcaab]/30 pb-4 mb-4 select-none">
+      
+      {/* BRANDING LOGO BLOCK (Left-Justified) */}
+      <div className="flex flex-col items-start text-left">
+        <div className="flex flex-row items-center gap-2.5">
+          {/* 1. BRAND MASCOT IMAGE */}
+          <div className="flex-shrink-0">
+            <img 
+              src="/mascot.png" 
+              alt="Namewise Mascot" 
+              className="w-10 h-auto object-contain mix-blend-multiply drop-shadow-sm pointer-events-none" 
+            />
+          </div>
 
-        <h1 className="text-2xl font-bold tracking-tight mb-1 mt-4">Network Notes AI</h1>
-        <p className="text-xs font-semibold text-emerald-600 flex items-center justify-center gap-1 mb-6">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          Zero-Knowledge Encryption Active
-        </p>
-        
-        {/* Interactive Recording Button Frame */}
-        <div className="flex flex-col items-center justify-center my-8">
-          <button
-            onClick={isRecording ? stopRecording : startRecording}
-            disabled={isSaving}
-            className={`w-28 h-28 rounded-full flex flex-col items-center justify-center cursor-pointer transition-all relative outline-none select-none ${
-              isRecording 
-                ? 'bg-red-500 text-white shadow-lg shadow-red-200 scale-105 animate-pulse' 
-                : 'bg-red-50 p-2 text-red-600 hover:bg-red-100 border-4 border-white shadow-md'
-            } disabled:opacity-40`}
-          >
-            {isRecording ? (
-              <div className="flex flex-col items-center gap-1">
-                <span className="h-3 w-3 bg-white rounded-sm animate-scale"></span>
-                <span className="text-xs font-bold uppercase tracking-wider">Stop</span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-1">
-                <span className="h-4 w-4 bg-red-600 rounded-full"></span>
-                <span className="text-xs font-bold uppercase tracking-wider">Record</span>
-              </div>
-            )}
-          </button>
+          {/* 2. LOGO TYPOGRAPHY */}
+          <div className="flex items-center">
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 240 45" 
+              className="w-36 h-auto"
+            >
+              {/* "namewise.ai" Lowercase Custom Wordmark */}
+              <text x="0" y="34" fill="#3c5671" fontSize="32" fontWeight="900" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="-1.2">
+                namewise<tspan fill="#3c5671">.ai </tspan>
+              </text>
 
-          {/* Real-time Status Displayer */}
-          {statusMessage && (
-            <p className="mt-4 text-xs font-medium text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100">
-              {statusMessage}
-            </p>
-          )}
-
-          {error && (
-            <p className="mt-4 text-xs font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded-full border border-red-100">
-              {error}
-            </p>
-          )}
-        </div>
-<p className="text-xs text-slate-400 max-w-xs mx-auto">
-          {isRecording 
-            ? "Listening to your thoughts... Tap again to process seamlessly." 
-            : "Tap record immediately after stepping away from a conversation to dictate what happened."}
-        </p>
-      </div> {/* ← This is the end of your recording card div */}
-
-{/* ↓ CONVERSION LANDING SIGNUP CARD (Only visible to guest accounts) ↓ */}
-{isAnonymousUser && (
-  <div className="w-full max-w-md mt-6 bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-5 rounded-2xl shadow-xl border border-indigo-500/20 text-left">
-    <h3 className="font-bold text-base text-white">Secure Your Vault</h3>
-    <p className="text-xs text-indigo-200 mt-1 leading-relaxed">
-      Your networking interactions are currently saved locally to this browser session. Enter your email to encrypt your vault permanently across all devices.
-    </p>
-
-    <form onSubmit={handleEmailSignUp} className="mt-4 flex flex-col gap-2">
-      <input
-        type="email"
-        placeholder="Enter your email address"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        disabled={isSubmittingAuth}
-        required
-        className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-white transition disabled:opacity-50"
-      />
-      <button
-        type="submit"
-        disabled={isSubmittingAuth}
-        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-2 text-xs font-bold transition shadow-sm disabled:opacity-50"
-      > {/* Fixed tag opening */}
-        {isSubmittingAuth ? 'Securing Link...' : 'Claim My Encrypted Vault'}
-      </button>
-    </form>
-
-    {authMessage && (
-      <div className={`mt-3 p-2.5 rounded-lg text-xs font-medium border ${
-        authMessage.type === 'success' 
-          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' 
-          : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
-      }`}>
-        {authMessage.text}
-      </div>
-    )}
-  </div>
-)}
-
-
-{/* ↓ TABS CONTROLLER ↓ */}
-
-      <div className="w-full max-w-md mt-6 flex border-b border-slate-200">
-        <button
-          onClick={() => { setActiveTab('memos'); setSelectedContact(null); }}
-          className={`flex-1 pb-3 text-sm font-semibold border-b-2 transition ${
-            activeTab === 'memos' 
-              ? 'border-emerald-600 text-emerald-600' 
-              : 'border-transparent text-slate-400 hover:text-slate-600'
-          }`}
-        >
-          Memos Timeline
-        </button>
-        <button
-          onClick={() => setActiveTab('rolodex')}
-          className={`flex-1 pb-3 text-sm font-semibold border-b-2 transition ${
-            activeTab === 'rolodex' 
-              ? 'border-emerald-600 text-emerald-600' 
-              : 'border-transparent text-slate-400 hover:text-slate-600'
-          }`}
-        >
-          Network Rolodex ({sortedContactNames.length})
-        </button>
-      </div>
-
-      {/* Main Content View Switcher Container */}
-      <div className="w-full max-w-md mt-6">
-        
-        {/* Always display incoming triage flags at the top regardless of current tab */}
-{/* Always display incoming triage flags at the top regardless of current tab */}
-        {currentTriageItem && (
-          <div className="bg-slate-900 border border-indigo-500/30 text-white p-5 rounded-2xl shadow-lg text-left mb-6">
-            <div className="flex items-center gap-1.5 mb-2.5">
-              <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Incoming Network Sync</h3>
-            </div>
-            
-            <p className="text-sm text-slate-200 leading-relaxed">
-              We detected <strong className="text-indigo-300">"{currentTriageItem.detected_name}"</strong> inside this interaction.
-            </p>
-
-            {/* Smart linking suggestion block */}
-            {hasMatch && (
-              <div className="mt-3 p-3 bg-indigo-950/40 border border-indigo-500/10 rounded-xl">
-                <p className="text-xs text-indigo-200">
-                  Looks like an existing match: <strong className="text-white">"{suggestedContact?.contact_name}"</strong>
-                </p>
-                <button 
-                  onClick={onConfirmSuggestedMatch} 
-                  className="mt-2 w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg py-1.5 text-xs font-semibold transition"
-                >
-                  Yes, Link to {suggestedContact?.contact_name}
-                </button>
-              </div>
-            )}
-
-            {/* Manual Merge or Create New Interface */}
-            <div className="mt-4 pt-3.5 border-t border-slate-800 flex flex-col gap-2.5">
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Or choose action manually:
-              </label>
               
-              <div className="flex gap-2">
-                {sortedContactNames.length > 0 && (
-                  <select
-                    value={mergeTargetName}
-                    onChange={(e) => setMergeTargetName(e.target.value)}
-                    className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value="">-- Merge into existing --</option>
-                    {sortedContactNames.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                )}
+            </svg>
+          </div>
+        </div>
+        
+        {/* New App Subtitle */}
+        <p className="text-[11px] font-bold uppercase tracking-wider text-[#7eabc2] mt-0.5 pl-1">
+          Connect Better
+        </p>
+      </div>
 
-                <button
-                  onClick={() => {
-                    if (mergeTargetName) {
-                      // Merge: link the note to the chosen contact name
-                      onConfirmMatchWithName(mergeTargetName);
-                      setMergeTargetName('');
-                    } else {
-                      // Create brand new profile using the exact text detected
-                      onConfirmAsNewPerson();
-                    }
-                  }}
-                  className="px-3 py-2 bg-slate-850 hover:bg-slate-800 border border-slate-700 text-white rounded-xl text-xs font-bold transition shadow-sm whitespace-nowrap"
-                >
-                  {mergeTargetName ? 'Confirm Merge' : 'Create New Profile'}
-                </button>
-              </div>
-            </div>
+      {/* USER INFO & UTILITIES (Right-Justified, Level with Branding) */}
+      <div className="flex flex-col items-end gap-1.5 text-right">
+        {!isAnonymousUser && userEmail && (
+          <span className="text-[10px] font-medium text-[#3c5671] bg-[#f7f7ed] px-2 py-0.5 rounded border border-[#dfcaab]">
+            👤 {userEmail}
+          </span>
+        )}
+        <button 
+          onClick={handleSignOut}
+          className="text-xs font-semibold text-[#3c5671]/70 hover:text-[#3c5671] transition"
+        >
+          Sign Out
+        </button>
+      </div>
+
+    </div>
+
+    {/* 2. REMOVED OLD REDUNDANT BLOCKS FROM REFACTOR */}
+
+    {/* Interactive Recording Button Frame */}
+    <div className="flex flex-col items-center justify-center my-8">
+      <button
+        onClick={isRecording ? stopRecording : startRecording}
+        disabled={isSaving}
+        className={`w-28 h-28 rounded-full flex flex-col items-center justify-center cursor-pointer transition-all relative outline-none select-none ${
+          isRecording 
+            ? 'bg-[#f6e7ca] text-[#3c5671] shadow-lg shadow-[#f6e7ca]/50 scale-105 animate-pulse' 
+            : 'bg-[#f7f7ed] p-2 text-[#7eabc2] hover:bg-[#dfcaab]/20 border-4 border-white shadow-md shadow-[#dfcaab]/30'
+        } disabled:opacity-40`}
+      >
+        {isRecording ? (
+          <div className="flex flex-col items-center gap-1">
+            <span className="h-3 w-3 bg-[#3c5671] rounded-sm"></span>
+            <span className="text-xs font-bold uppercase tracking-wider">Stop</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-1">
+            <span className="h-4 w-4 bg-[#7eabc2] rounded-full"></span>
+            <span className="text-xs font-bold uppercase tracking-wider text-[#3c5671]">Record</span>
           </div>
         )}
+      </button>
 
-        {/* VIEW A: MEMOS TIMELINE FLOW */}
-        {activeTab === 'memos' && (
-          <>
-            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Your Encrypted Log</h2>
-            {fetchingNotes ? (
-              <div className="py-8 text-center bg-white rounded-xl border border-slate-100 text-xs text-slate-400">
-                Unlocking vault and decrypting archives...
+      {/* Real-time Status Displayer */}
+      {statusMessage && (
+        <p className="mt-4 text-xs font-medium text-[#7eabc2] bg-[#f7f7ed] px-3 py-1.5 rounded-full border border-[#dfcaab]">
+          {statusMessage}
+        </p>
+      )}
+
+      {error && (
+        <p className="mt-4 text-xs font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded-full border border-red-200">
+          {error}
+        </p>
+      )}
+    </div>
+    
+    <p className="text-xs text-[#3c5671]/70 max-w-xs mx-auto leading-relaxed">
+      {isRecording 
+        ? "Listening to your thoughts... Tap again to process seamlessly." 
+        : "Who is top of mind for you? Tap record immediately after stepping away from an interaction to record details."}
+    </p>
+  </div>
+
+    {/* ↓ CONVERSION LANDING SIGNUP CARD (Only visible to guest accounts) ↓ */}
+    {isAnonymousUser && (
+      <div className="w-full max-w-md mt-6 bg-[#3c5671] text-white p-5 rounded-2xl shadow-xl border border-[#3c5671]/20 text-left">
+        <h3 className="font-bold text-base text-[#f7f7ed]">Save Your Timeline</h3>
+        <p className="text-xs text-[#f7f7ed]/80 mt-1 leading-relaxed">
+          Your interactions are stored safely in this browser sandbox. Enter your email to connect your account and verify your identity across other screens.
+        </p>
+
+        <form onSubmit={handleEmailSignUp} className="mt-4 flex flex-col gap-2">
+          <input
+            type="email"
+            placeholder="Enter your email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={isSubmittingAuth}
+            required
+            className="w-full px-3 py-2 bg-[#f7f7ed]/10 border border-[#f7f7ed]/20 rounded-xl text-sm placeholder-[#f7f7ed]/50 focus:outline-none focus:border-[#7eabc2] text-[#f7f7ed] transition disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={isSubmittingAuth}
+            className="w-full bg-[#f6e7ca] hover:bg-[#dfcaab] text-[#3c5671] rounded-xl py-2 text-xs font-bold transition shadow-sm disabled:opacity-50"
+          >
+            {isSubmittingAuth ? 'Securing Link...' : 'Keep My Logs Saved'}
+          </button>
+        </form>
+
+        {authMessage && (
+          <div className={`mt-3 p-2.5 rounded-lg text-xs font-medium border ${
+            authMessage.type === 'success' 
+              ? 'bg-[#7eabc2]/10 border-[#7eabc2]/20 text-[#7eabc2]' 
+              : 'bg-red-500/10 border-red-500/20 text-red-300'
+          }`}>
+            {authMessage.text}
+          </div>
+        )}
+      </div>
+    )}
+
+
+    {/* ↓ TABS CONTROLLER ↓ */}
+
+    <div className="w-full max-w-md mt-6 flex border-b border-[#dfcaab]/50">
+      <button
+        onClick={() => { setActiveTab('memos'); setSelectedContact(null); }}
+        className={`flex-1 pb-3 text-sm font-semibold border-b-2 transition ${
+          activeTab === 'memos' 
+            ? 'border-[#7eabc2] text-[#7eabc2]' 
+            : 'border-transparent text-[#3c5671]/60 hover:text-[#3c5671]'
+        }`}
+      >
+        Memos Timeline
+      </button>
+      <button
+        onClick={() => setActiveTab('rolodex')}
+        className={`flex-1 pb-3 text-sm font-semibold border-b-2 transition ${
+          activeTab === 'rolodex' 
+            ? 'border-[#7eabc2] text-[#7eabc2]' 
+            : 'border-transparent text-[#3c5671]/60 hover:text-[#3c5671]'
+        }`}
+      >
+        Your Rolodex ({sortedContactNames.length})
+      </button>
+    </div>
+
+    {/* Main Content View Switcher Container */}
+    <div className="w-full max-w-md mt-6">
+      
+      {/* Always display incoming triage flags at the top regardless of current tab */}
+      {currentTriageItem && (
+        <div className="bg-[#3c5671] border border-[#7eabc2]/20 text-white p-5 rounded-2xl shadow-lg text-left mb-6">
+          <div className="flex items-center gap-1.5 mb-2.5">
+            <span className="h-2 w-2 rounded-full bg-[#f6e7ca] animate-pulse"></span>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#f7f7ed]/70">Incoming Conversation Sync</h3>
+          </div>
+          
+          <p className="text-sm text-[#f7f7ed] leading-relaxed">
+            We noticed <strong className="text-[#f6e7ca]">"{currentTriageItem.detected_name}"</strong> referenced in this record.
+          </p>
+
+          {/* Smart linking suggestion block */}
+          {hasMatch && (
+            <div className="mt-3 p-3 bg-[#f7f7ed]/10 border border-[#f7f7ed]/20 rounded-xl">
+              <p className="text-xs text-[#f7f7ed]/80">
+                Looks like an existing profile: <strong className="text-white">"{suggestedContact?.contact_name}"</strong>
+              </p>
+              <path 
+                onClick={onConfirmSuggestedMatch} 
+                className="mt-2 w-full bg-[#7eabc2] hover:bg-[#7eabc2]/80 text-[#3c5671] font-bold rounded-lg py-1.5 text-xs transition text-center block cursor-pointer"
+              >
+                Yes, Link to {suggestedContact?.contact_name}
+              </path>
+            </div>
+          )}
+
+          {/* Manual Merge or Create New Interface */}
+          <div className="mt-4 pt-3.5 border-t border-[#f7f7ed]/10 flex flex-col gap-2.5">
+            <label className="text-[11px] font-bold text-[#f7f7ed]/70 uppercase tracking-wider">
+              Or arrange manually:
+            </label>
+            
+            <div className="flex gap-2">
+              {sortedContactNames.length > 0 && (
+                <select
+                  value={mergeTargetName}
+                  onChange={(e) => setMergeTargetName(e.target.value)}
+                  className="flex-1 bg-[#f7f7ed]/10 border border-[#f7f7ed]/20 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-[#7eabc2]"
+                >
+                  <option value="" className="text-[#3c5671]">-- Merge into existing --</option>
+                  {sortedContactNames.map((name) => (
+                    <option key={name} value={name} className="text-[#3c5671]">{name}</option>
+                  ))}
+                </select>
+              )}
+
+              <button
+                onClick={() => {
+                  if (mergeTargetName) {
+                    onConfirmMatchWithName(mergeTargetName);
+                    setMergeTargetName('');
+                  } else {
+                    onConfirmAsNewPerson();
+                  }
+                }}
+                className="px-3 py-2 bg-[#f6e7ca] hover:bg-[#dfcaab] border border-[#f6e7ca] text-[#3c5671] rounded-xl text-xs font-bold transition shadow-sm whitespace-nowrap"
+              >
+                {mergeTargetName ? 'Confirm Merge' : 'Create New Profile'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW A: MEMOS TIMELINE FLOW */}
+      {activeTab === 'memos' && (
+        <>
+          <h2 className="text-sm font-bold text-[#3c5671]/60 uppercase tracking-wider mb-3 px-1">Your Logs</h2>
+          {fetchingNotes ? (
+            <div className="py-8 text-center bg-white rounded-xl border border-[#dfcaab]/50 text-xs text-[#3c5671]/60">
+              Opening history logs...
+            </div>
+          ) : notes.length === 0 ? (
+            <div className="py-12 text-center bg-white rounded-xl border border-dashed border-[#dfcaab] p-6">
+              <p className="text-sm text-[#3c5671]/50 font-medium">No interaction notes captured yet.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {notes.map((note) => (
+                <div key={note.id} className="bg-white p-5 rounded-xl shadow-sm border border-[#dfcaab]/50 text-left transition hover:border-[#dfcaab]/80">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-[#3c5671] text-base leading-tight">{note.headline}</h3>
+                    <span className="text-[10px] text-[#3c5671]/80 font-medium bg-[#f7f7ed] px-2 py-0.5 rounded border border-[#dfcaab]/50">
+                      {new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-[#3c5671]/80 leading-relaxed">{note.transcript}</p>
+                  <div className="mt-3 pt-2.5 border-t border-[#dfcaab]/20 flex items-center justify-between">
+                    <span className="text-[10px] text-[#3c5671]/60 font-medium">
+                      Saved Privately
+                    </span>
+                    {note.contact_name && (
+                      <span className="text-[10px] text-[#3c5671] bg-[#f6e7ca]/30 px-2 py-0.5 rounded font-bold border border-[#dfcaab]/40">
+                        👤 {note.contact_name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* VIEW B: THE CONTACTS ROLODEX */}
+      {activeTab === 'rolodex' && (
+        <div>
+          {!selectedContact ? (
+            <>
+              <h2 className="text-sm font-bold text-[#3c5671]/60 uppercase tracking-wider mb-3 px-1">Directory</h2>
+              {sortedContactNames.length === 0 ? (
+                <div className="py-12 text-center bg-white rounded-xl border border-dashed border-[#dfcaab] text-sm text-[#3c5671]/50">
+                  Your records will sort themselves here as profiles accumulate.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2">
+                  {sortedContactNames.map((name) => (
+                    <button
+                      key={name}
+                      onClick={() => setSelectedContact(name)}
+                      className="w-full bg-white p-4 rounded-xl shadow-sm border border-[#dfcaab]/50 text-left flex items-center justify-between hover:border-[#dfcaab]/80 transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-[#f7f7ed] border border-[#dfcaab] flex items-center justify-center text-sm font-bold text-[#7eabc2]">
+                          {name[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-[#3c5671] text-sm">{name}</span>
+                          <p className="text-[11px] text-[#3c5671]/60">{contactsDirectory[name].length} mapped entries</p>
+                        </div>
+                      </div>
+                      <span className="text-[#dfcaab] font-bold">→</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            /* INDIVIDUAL DRILL DOWN DRAWER */
+            <div>
+              <button
+                onClick={() => setSelectedContact(null)}
+                className="mb-4 text-xs font-semibold text-[#3c5671] flex items-center gap-1 bg-[#f7f7ed] px-2.5 py-1.5 rounded-lg border border-[#dfcaab]/60 hover:bg-[#dfcaab]/20 transition"
+              >
+                ← Back to Directory
+              </button>
+              
+              <div className="bg-white p-5 rounded-xl border border-[#dfcaab]/50 shadow-sm text-left mb-4">
+                <div className="w-12 h-12 rounded-full bg-[#f7f7ed] flex items-center justify-center text-lg font-bold text-[#7eabc2] mb-2 border border-[#dfcaab]">
+                  {selectedContact[0].toUpperCase()}
+                </div>
+                <h2 className="text-xl font-bold text-[#3c5671]">{selectedContact}</h2>
+                <p className="text-xs text-[#3c5671]/60 mt-0.5">Compiled Network Timeline</p>
               </div>
-            ) : notes.length === 0 ? (
-              <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-200 p-6">
-                <p className="text-sm text-slate-400 font-medium">No networking notes captured yet.</p>
-              </div>
-            ) : (
+
+              <h3 className="text-xs font-bold text-[#3c5671]/60 uppercase tracking-wider mb-3 px-1">Linked Interactions</h3>
               <div className="flex flex-col gap-3">
-                {notes.map((note) => (
-                  <div key={note.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 text-left transition hover:border-slate-200">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-bold text-slate-800 text-base leading-tight">{note.headline}</h3>
-                      <span className="text-[10px] text-slate-400 font-medium bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                {contactsDirectory[selectedContact].map((note) => (
+                  <div key={note.id} className="bg-white p-4 rounded-xl border border-[#dfcaab]/50 shadow-sm text-left">
+                    <div className="flex justify-between items-start mb-1.5">
+                      <h4 className="font-bold text-[#3c5671] text-sm">{note.headline}</h4>
+                      <span className="text-[9px] text-[#3c5671]/80 bg-[#f7f7ed] px-1.5 py-0.5 rounded border border-[#dfcaab]/50">
                         {new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                       </span>
                     </div>
-                    <p className="text-sm text-slate-600 leading-relaxed">{note.transcript}</p>
-                    <div className="mt-3 pt-2.5 border-t border-slate-50 flex items-center justify-between">
-                      <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-medium border border-emerald-100/50">
-                        AES-GCM Decrypted
-                      </span>
-                      {note.contact_name && (
-                        <span className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded font-semibold border border-indigo-100/50">
-                          👤 {note.contact_name}
-                        </span>
-                      )}
-                    </div>
+                    <p className="text-xs text-[#3c5671]/80 leading-relaxed">{note.transcript}</p>
                   </div>
                 ))}
               </div>
-            )}
-          </>
-        )}
-
-        {/* VIEW B: THE CONTACTS ROLODEX */}
-        {activeTab === 'rolodex' && (
-          <div>
-            {!selectedContact ? (
-              <>
-                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Directory</h2>
-                {sortedContactNames.length === 0 ? (
-                  <div className="py-12 text-center bg-white rounded-xl border border-dashed border-slate-200 text-sm text-slate-400">
-                    Triage your memos to populate your contact Rolodex.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-2">
-                    {sortedContactNames.map((name) => (
-                      <button
-                        key={name}
-                        onClick={() => setSelectedContact(name)}
-                        className="w-full bg-white p-4 rounded-xl shadow-sm border border-slate-100 text-left flex items-center justify-between hover:border-slate-300 transition"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-sm font-bold text-emerald-700">
-                            {name[0].toUpperCase()}
-                          </div>
-                          <div>
-                            <span className="font-semibold text-slate-800 text-sm">{name}</span>
-                            <p className="text-[11px] text-slate-400">{contactsDirectory[name].length} context dynamic interactions</p>
-                          </div>
-                        </div>
-                        <span className="text-slate-300 font-bold">→</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              /* INDIVIDUAL DRILL DOWN DRAWER */
-              <div>
-                <button
-                  onClick={() => setSelectedContact(null)}
-                  className="mb-4 text-xs font-semibold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition"
-                >
-                  ← Back to Directory
-                </button>
-                
-                <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm text-left mb-4">
-                  <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-lg font-bold text-emerald-800 mb-2">
-                    {selectedContact[0].toUpperCase()}
-                  </div>
-                  <h2 className="text-xl font-bold text-slate-900">{selectedContact}</h2>
-                  <p className="text-xs text-slate-400 mt-0.5">Compiled Network Timeline Context</p>
-                </div>
-
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Linked Interactions</h3>
-                <div className="flex flex-col gap-3">
-                  {contactsDirectory[selectedContact].map((note) => (
-                    <div key={note.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-left">
-                      <div className="flex justify-between items-start mb-1.5">
-                        <h4 className="font-bold text-slate-800 text-sm">{note.headline}</h4>
-                        <span className="text-[9px] text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-                          {new Date(note.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 leading-relaxed">{note.transcript}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </main>
-  );
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  </main>
+);
 }
