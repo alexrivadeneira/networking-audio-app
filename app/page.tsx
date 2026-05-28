@@ -23,6 +23,11 @@ export default function Home() {
   const [fetchingNotes, setFetchingNotes] = useState(true);
   const [triageQueue, setTriageQueue] = useState<any[]>([]);
 
+
+  const [email, setEmail] = useState('');
+  const [authMessage, setAuthMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
+
   useEffect(() => {
     // 1. Check current active session on initial load
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -198,6 +203,37 @@ useEffect(() => {
     if (error) {
       setError(error.message);
       setAuthLoading(false);
+    }
+  };
+
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+
+    setIsSubmittingAuth(true);
+    setAuthMessage(null);
+
+    try {
+      // This tells Supabase to upgrade the current anonymous session to a permanent user account
+      const { data, error } = await supabase.auth.updateUser({
+        email: email
+      });
+
+      if (error) throw error;
+
+      setAuthMessage({
+        type: 'success',
+        text: '✉️ Magic link sent! Check your inbox to confirm your account.'
+      });
+      setEmail('');
+    } catch (err: any) {
+      console.error("Auth upgrade failed:", err);
+      setAuthMessage({
+        type: 'error',
+        text: err.message || 'Failed to update account. Try again.'
+      });
+    } finally {
+      setIsSubmittingAuth(false);
     }
   };
 
@@ -435,7 +471,46 @@ recorder.onstop = async () => {
         </p>
       </div> {/* ← This is the end of your recording card div */}
 
+{/* ↓ CONVERSION LANDING SIGNUP CARD ↓ */}
+      <div className="w-full max-w-md mt-6 bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-5 rounded-2xl shadow-xl border border-indigo-500/20 text-left">
+        <h3 className="font-bold text-base text-white">Secure Your Vault</h3>
+        <p className="text-xs text-indigo-200 mt-1 leading-relaxed">
+          Your networking interactions are currently saved locally to this browser session. Enter your email to encrypt your vault permanently across all devices.
+        </p>
+
+        <form onSubmit={handleEmailSignUp} className="mt-4 flex flex-col gap-2">
+          <input
+            type="email"
+            placeholder="Enter your email address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={isSubmittingAuth}
+            required
+            className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-white transition disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={isSubmittingAuth}
+            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-2 text-xs font-bold transition shadow-sm disabled:opacity-50"
+          >
+            {isSubmittingAuth ? 'Securing Link...' : 'Claim My Encrypted Vault'}
+          </button>
+        </form>
+
+        {authMessage && (
+          <div className={`mt-3 p-2.5 rounded-lg text-xs font-medium border ${
+            authMessage.type === 'success' 
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' 
+              : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+          }`}>
+            {authMessage.text}
+          </div>
+        )}
+      </div>
+
+
 {/* ↓ TABS CONTROLLER ↓ */}
+
       <div className="w-full max-w-md mt-6 flex border-b border-slate-200">
         <button
           onClick={() => { setActiveTab('memos'); setSelectedContact(null); }}
