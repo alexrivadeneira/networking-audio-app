@@ -28,6 +28,8 @@ export default function Home() {
   const [authMessage, setAuthMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
 
+  const [authView, setAuthView] = useState<'landing' | 'login'>('landing');
+
   useEffect(() => {
     // 1. Check current active session on initial load
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -209,7 +211,7 @@ useEffect(() => {
     }
   };
 
-  const handleEmailSignUp = async (e: React.FormEvent) => {
+const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
 
@@ -217,23 +219,36 @@ useEffect(() => {
     setAuthMessage(null);
 
     try {
-      // This tells Supabase to upgrade the current anonymous session to a permanent user account
-      const { data, error } = await supabase.auth.updateUser({
-        email: email
-      });
+      // Check if we have an active guest session to upgrade
+      const isAnonymous = session?.user?.app_metadata?.provider === 'anonymous';
 
-      if (error) throw error;
+      if (session && isAnonymous) {
+        // SCENARIO A: User is currently an anonymous guest and wants to claim their vault
+        const { error } = await supabase.auth.updateUser({ email: email });
+        if (error) throw error;
+      } else {
+        // SCENARIO B: No session exists (incognito/signed out) or user is returning.
+        // Send a clean magic link login token.
+        const { error } = await supabase.auth.signInWithOtp({
+          email: email,
+          options: {
+            // This ensures that clicking the link signs them right back in
+            emailRedirectTo: window.location.origin, 
+          }
+        });
+        if (error) throw error;
+      }
 
       setAuthMessage({
         type: 'success',
-        text: '✉️ Magic link sent! Check your inbox to confirm your account.'
+        text: '✉️ Magic link sent! Check your inbox to securely unlock your vault.'
       });
       setEmail('');
     } catch (err: any) {
-      console.error("Auth upgrade failed:", err);
+      console.error("Auth process failed:", err);
       setAuthMessage({
         type: 'error',
-        text: err.message || 'Failed to update account. Try again.'
+        text: err.message || 'Verification failed. Please try again.'
       });
     } finally {
       setIsSubmittingAuth(false);
@@ -270,37 +285,77 @@ useEffect(() => {
   }
 
   // VIEW 1: Onboarding Card (If user is NOT logged in yet)
+// ↓ UNAUTHENTICATED LANDING & LOGIN PORTAL ↓
   if (!session) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-slate-50 text-slate-900">
-        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-sm border border-slate-100 text-center">
-          <h1 className="text-2xl font-bold tracking-tight mb-2">Network Notes AI</h1>
-          <p className="text-sm text-slate-500 mb-6">
-            Step aside after a conversation, dictate your notes, and let AI organize the rest.
-          </p>
-          
-          <div className="rounded-lg bg-slate-50 p-3.5 text-xs text-slate-600 border border-slate-100 mb-6 text-left">
-            🔒 **Zero-Knowledge Privacy Layer Active:** Every note is encrypted directly on your device using a local key. Even the admin cannot read your database entries.
-          </div>
-
-          {error && (
-            <div className="mb-4 rounded-lg bg-red-50 p-3 text-xs text-red-600 font-medium text-left">
-              {error}
+      <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6 text-center">
+        {authView === 'landing' ? (
+          /* A: THE AUTOMATED GETTING STARTED / LOADING VIEW */
+          <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-slate-100 flex flex-col items-center">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-xl font-bold shadow-md shadow-indigo-200 mb-4 animate-pulse">
+              🎙️
             </div>
-          )}
+            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Private Network Ledger</h1>
+            <p className="text-xs text-slate-500 mt-2 max-w-xs leading-relaxed">
+              Preparing your private ledger vault...
+            </p>
+            
+            <div className="w-full bg-slate-100 h-2 rounded-full mt-6 overflow-hidden">
+              <div className="bg-indigo-600 h-full rounded-full animate-infinite-scroll w-1/3"></div>
+            </div>
 
-          <button
-            onClick={handleInstantOnboarding}
-            disabled={authLoading}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {authLoading ? 'Creating secure session...' : 'Get Started Instantly'}
-          </button>
-          
-          <p className="mt-4 text-xs text-slate-400">
-            No email required. A private cryptographic vault will be set up in your browser.
-          </p>
-        </div>
+            <button
+              onClick={() => setAuthView('login')}
+              className="mt-6 text-xs font-semibold text-indigo-600 hover:text-indigo-500 transition"
+            >
+              Already have an encrypted vault? Sign In
+            </button>
+          </div>
+        ) : (
+          /* B: THE RETURNING USER LOGIN PORTAL */
+          <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-xl border border-slate-100 text-left">
+            <button
+              onClick={() => { setAuthView('landing'); setAuthMessage(null); }}
+              className="text-xs font-semibold text-slate-400 hover:text-slate-600 flex items-center gap-1 mb-4 transition"
+            >
+              ← Back
+            </button>
+            
+            <h2 className="text-lg font-bold text-slate-900">Unlock Your Vault</h2>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              Enter your registered email address. We will send a secure magic link straight to your inbox to instantly decrypt your archives.
+            </p>
+
+            <form onSubmit={handleEmailSignUp} className="mt-5 flex flex-col gap-2.5">
+              <input
+                type="email"
+                placeholder="name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isSubmittingAuth}
+                required
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-900 transition disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={isSubmittingAuth}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-2.5 text-xs font-bold transition shadow-sm disabled:opacity-50"
+              >
+                {isSubmittingAuth ? 'Sending Link...' : 'Send Magic Sign-In Link'}
+              </button>
+            </form>
+
+            {authMessage && (
+              <div className={`mt-4 p-3 rounded-xl text-xs font-medium border ${
+                authMessage.type === 'success' 
+                  ? 'bg-emerald-50 border-emerald-100 text-emerald-700' 
+                  : 'bg-rose-50 border-rose-100 text-rose-700'
+              }`}>
+                {authMessage.text}
+              </div>
+            )}
+          </div>
+        )}
       </main>
     );
   }
