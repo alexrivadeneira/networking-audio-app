@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Groq } from "groq-sdk";
-
+import { getGroqKey } from '@/utils/env'; // Adjust the import path as needed
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey = process.env.GROQ_API_KEY.replace("GROQ_API_KEY=", "");
-    if (!apiKey) {
-      return NextResponse.json({ error: "Missing GROQ_API_KEY in environment variables." }, { status: 500 });
-    }
+try {
+    // This helper throws an error if the key is missing, 
+    // which the catch block below will handle.
+    const apiKey = getGroqKey();
 
     const groq = new Groq({ apiKey });
 
@@ -18,7 +18,14 @@ export async function POST(req: NextRequest) {
 
     if (!audioFileBlob) {
       return NextResponse.json({ error: "Missing audio payload file." }, { status: 400 });
-    }
+    } 
+    }catch (error: any) {
+    console.error("API Route Error:", error);
+    return NextResponse.json(
+      { error: error.message || "Internal processing failed." }, 
+      { status: 500 }
+    );
+  }
 
     // 2. Convert generic blob to a Node File object for Groq
     const buffer = Buffer.from(await audioFileBlob.arrayBuffer());
