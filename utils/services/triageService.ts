@@ -1,62 +1,38 @@
-import { supabase } from '../supabase'; // ◄ Verified correct path
+import { supabase } from '../supabase';
 
 /**
  * ACTION 1: Initialize a contact entry path by upgrading the current note 
  * to act as the primary profile anchor.
  */
-export const createNewContactAndLink = async (
-  noteId: string, 
-  contactName: string, 
-  userId: string,
-  isLastItemForThisNote: boolean // ◄ Add this flag to safely manage the queue status
-) => {
+export async function createNewContactAndLink(noteId: string, name: string, userId: string) {
   try {
-    // 1. Create the master entry in the 'contacts' table
-    const { data: newContact, error: contactError } = await supabase
-      .from('contacts')
-      .insert([{ user_id: userId, name: contactName }])
-      .select()
-      .single();
+    console.log(`Creating contact profile text entry for: ${name} on Note ID: ${noteId}`);
+    const { data, error } = await supabase
+      .from('network_notes')
+      .update({
+        contact_name: name, // Fill the text marker name column
+        processing_status: 'completed' // Mark this specific row task clear
+      })
+      .eq('id', noteId) // ◄ Rely cleanly on the unique Note UUID match
+      .select();
 
-    if (contactError) {
-      console.error("❌ Database Error creating contact row:", contactError.message);
-      throw contactError;
+      console.log("🔥 Supabase direct mutation return row:", data);
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      console.warn("⚠️ RLS GUARD TRIGGERED: Supabase found the row but refused to alter it. Check your table's UPDATE policies.");
+    } else {
+      console.log("🔥 Supabase direct mutation return row:", data);
     }
-
-    // 2. Map the relationship in the new junction table
-    const { error: linkError } = await supabase
-      .from('note_contacts')
-      .insert([{
-        user_id: userId,
-        note_id: noteId,
-        contact_id: newContact.id
-      }]);
-
-    if (linkError) {
-      console.error("❌ Database Error creating relational link:", linkError.message);
-      throw linkError;
-    }
-
-    // 3. Conditional Note Update: Only clear from triage when the last sibling card is cleared
-    if (isLastItemForThisNote) {
-      const { error: noteUpdateError } = await supabase
-        .from('network_notes')
-        .update({ processing_status: 'completed' })
-        .eq('id', noteId);
-
-      if (noteUpdateError) {
-        console.error("❌ Database Error completing note status:", noteUpdateError.message);
-        throw noteUpdateError;
-      }
-    }
-
-    return newContact;
-
-  } catch (error) {
-    console.error("🚨 Complete failure inside createNewContactAndLink:", error);
-    throw error;
+    
+    return { success: data && data.length > 0 };
+  } catch (err) {
+    console.error("triageService [createNewContactAndLink] Failure:", err);
+    return { success: false, error: err };
   }
-};
+}
+
 /**
  * ACTION 2: Link an alias name directly to a master profile row name context
  */
@@ -69,16 +45,17 @@ export async function linkToExistingContact(
   try {
     console.log(`Linking alias "${detectedName}" to master contact profile "${existingContactName}"`);
 
+    // Ensure we don't push duplicate string tags into the tracking index
     const updatedAliases = Array.from(new Set([...currentAliases, detectedName]));
 
     const { error } = await supabase
       .from('network_notes')
       .update({
-        contact_name: existingContactName, 
-        aliases: updatedAliases, 
-        processing_status: 'completed' 
+        contact_name: existingContactName, // Associate this text group cluster
+        aliases: updatedAliases, // Store the appended tracking string slice
+        processing_status: 'completed' // Clear the flag
       })
-      .eq('id', noteId); 
+      .eq('id', noteId); // ◄ Rely cleanly on the unique Note UUID match
 
     if (error) throw error;
     return { success: true };
