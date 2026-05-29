@@ -5,35 +5,26 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-try {
-    // This helper throws an error if the key is missing, 
-    // which the catch block below will handle.
+    // 1. Initialize Groq
     const apiKey = getGroqKey();
-
     const groq = new Groq({ apiKey });
 
-    // 1. Extract the file blob from the form submission
+    // 2. Extract the file blob
     const formData = await req.formData();
-    const audioFileBlob = formData.get("file") as Blob;
+    const audioFileBlob = formData.get("file");
 
-    if (!audioFileBlob) {
-      return NextResponse.json({ error: "Missing audio payload file." }, { status: 400 });
-    } 
-    }catch (error: any) {
-    console.error("API Route Error:", error);
-    return NextResponse.json(
-      { error: error.message || "Internal processing failed." }, 
-      { status: 500 }
-    );
-  }
+    // TypeScript requires us to verify the type before calling .arrayBuffer()
+    if (!(audioFileBlob instanceof Blob)) {
+      return NextResponse.json({ error: "Missing or invalid audio payload" }, { status: 400 });
+    }
 
-    // 2. Convert generic blob to a Node File object for Groq
+    // 3. Process the file
     const buffer = Buffer.from(await audioFileBlob.arrayBuffer());
     const fileForGroq = new File([buffer], "memo.webm", { type: "audio/webm" });
 
     console.log("Dispatching audio to Groq Whisper...");
     
-    // 3. Request rapid transcription from Groq's Whisper v3 model
+    // ... continue with your Groq calls
     const transcriptionResponse = await groq.audio.transcriptions.create({
       file: fileForGroq,
       model: "whisper-large-v3",
