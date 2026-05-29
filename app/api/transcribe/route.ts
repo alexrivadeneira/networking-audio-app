@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey = process.env.GROQ_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY.replace("GROQ_API_KEY=", "");
     if (!apiKey) {
       return NextResponse.json({ error: "Missing GROQ_API_KEY in environment variables." }, { status: 500 });
     }

@@ -381,7 +381,7 @@ recorder.onstop = async () => {
           // setTriageQueue(prev => [...prev, ...newQueueItems]);
         }
 
-        setStatusMessage("✓ Securely locked in your vault!");
+        setStatusMessage("✓ Contact detected");
         await fetchAndDecryptNotes();
 
       } catch (err: any) {
@@ -430,12 +430,22 @@ recorder.onstop = async () => {
             Sign Out
           </button>
         </div>
-
-        <h1 className="text-2xl font-bold tracking-tight mb-1 mt-4">Network Notes AI</h1>
-        <p className="text-xs font-semibold text-emerald-600 flex items-center justify-center gap-1 mb-6">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          Zero-Knowledge Encryption Active
-        </p>
+<div className="flex flex-col items-center">
+  {/* Header Section */}
+  <div className="flex items-center gap-3 mb-1 mt-4">
+    <img 
+      src="/mascot.png" 
+      alt="Mascot" 
+      className="w-24 h-24 object-contain" 
+    />
+    <h1 className="text-2xl font-bold tracking-tight">namewise.ai</h1>
+  </div>
+  
+  {/* Sub-headline */}
+  <p className="text-xs font-semibold text-emerald-600 mb-6">
+     Who is top of mind for you?
+  </p>
+</div>
         
         {/* Interactive Recording Button Frame */}
         <div className="flex flex-col items-center justify-center my-8">
@@ -476,8 +486,8 @@ recorder.onstop = async () => {
         </div>
 <p className="text-xs text-slate-400 max-w-xs mx-auto">
           {isRecording 
-            ? "Listening to your thoughts... Tap again to process seamlessly." 
-            : "Tap record immediately after stepping away from a conversation to dictate what happened."}
+            ? "Processing" 
+            : ""}
         </p>
       </div> {/* ← This is the end of your recording card div */}
 
@@ -553,8 +563,8 @@ recorder.onstop = async () => {
         {currentTriageItem && (
           <div className="bg-slate-900 border border-indigo-500/30 text-white p-4 rounded-xl shadow-md text-left mb-6">
             <div className="flex items-center gap-1.5 mb-2">
-              <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Incoming Network Sync</h3>
+              {/* <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span> */}
+              {/* <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Incoming Network Sync</h3> */}
             </div>
             {hasMatch ? (
               <div>
@@ -609,9 +619,9 @@ recorder.onstop = async () => {
                     </div>
                     <p className="text-sm text-slate-600 leading-relaxed">{note.transcript}</p>
                     <div className="mt-3 pt-2.5 border-t border-slate-50 flex items-center justify-between">
-                      <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-medium border border-emerald-100/50">
+                      {/* <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-medium border border-emerald-100/50">
                         AES-GCM Decrypted
-                      </span>
+                      </span> */}
                       {note.contact_name && (
                         <span className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded font-semibold border border-indigo-100/50">
                           👤 {note.contact_name}
